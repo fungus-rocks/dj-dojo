@@ -1,0 +1,12 @@
+{
+  "name": "dj-dojo",
+  "version": "0.1.0",
+  "description": "Learn to DJ in the browser. Reads your DDJ-FLX4 (or keyboard) and scores your beatmatching and transitions.",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "start": "python3 -m http.server 8080",
+    "test": "node --test test/core.test.js"
+  }
+}
