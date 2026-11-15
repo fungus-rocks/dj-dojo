@@ -40,7 +40,11 @@ export class Deck {
     this.fader = ctx.createGain();
     this.xf = ctx.createGain();
     this.meter = ctx.createAnalyser(); this.meter.fftSize = 512;
-    this.trim.connect(this.low).connect(this.mid).connect(this.hi).connect(this.lp).connect(this.hp).connect(this.fader).connect(this.xf).connect(engine.master);
+    this.trim.connect(this.low).connect(this.mid).connect(this.hi).connect(this.lp).connect(this.hp).connect(this.fader).connect(this.xf);
+    // After the mixer: left/right placement and a solo switch, used by ear-training lessons.
+    this.pan = ctx.createStereoPanner();
+    this.out = ctx.createGain();
+    this.xf.connect(this.pan).connect(this.out).connect(engine.master);
     this.xf.connect(this.meter);
     // Headphone cue stand-in: a quiet pre-fader feed to the speakers.
     this.pfl = false;
@@ -329,7 +333,13 @@ export class Engine {
     const [ga, gb] = xfadeGains(this.bus.get('xfader'));
     return faderGain(this.bus.get(`${id}.fader`)) * (id === 'a' ? ga : gb);
   }
-  stopAll() { for (const d of Object.values(this.decks || {})) { d.pause(); d.tempoLock = null; d.bendDir = 0; d.holdBend = 0; d.cueHeld = false; this.setPfl(d.id, false); } this.locks.clear(); this.allowSync = true;
+  /** Place a deck in the stereo field: -1 = left ear, +1 = right ear. */
+  setPan(id, v) { this.decks[id].pan.pan.setTargetAtTime(v, this.ctx.currentTime, SMOOTH); }
+  /** Hear one deck alone ('a' or 'b'), or both again (null). */
+  solo(id) { for (const d of Object.values(this.decks)) d.out.gain.setTargetAtTime(!id || d.id === id ? 1 : 0, this.ctx.currentTime, SMOOTH); }
+
+  stopAll() { if (this.decks) { this.solo(null); this.setPan('a', 0); this.setPan('b', 0); }
+    for (const d of Object.values(this.decks || {})) { d.pause(); d.tempoLock = null; d.bendDir = 0; d.holdBend = 0; d.cueHeld = false; this.setPfl(d.id, false); } this.locks.clear(); this.allowSync = true;
     if (this.decks) for (const key of Object.keys(this.bus.values)) this.applyAbs(key, this.bus.values[key]);
   }
 }

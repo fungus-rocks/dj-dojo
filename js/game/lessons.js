@@ -191,7 +191,9 @@ const fasterSlower = (ctx) => {
   const { a, b, h } = ctx;
   const diffs = [5, 4, 3, 2.5, 2, 1.5, 1, 0.7];
   let round = -1, dir = 0, state = 'idle', correct = 0, log = [], clock, btnL, btnR, dotsEl;
-  const pair = pick(PAIRS);
+  const pair = pick(PAIRS), tiles = {};
+  // Hold a deck's CUE (or its tile) to hear that deck on its own.
+  const solo = (d) => { ctx.engine.solo(d); for (const k of ['a', 'b']) tiles[k].classList.toggle('on', k === d); };
 
   function next() {
     round++;
@@ -201,7 +203,7 @@ const fasterSlower = (ctx) => {
     b.tempoLock = (a.bpm * (1 + (dir * diffs[round]) / 100)) / b.track.bpm;
     restart();
     btnL.className = btnR.className = 'choice';
-    ctx.prompt(`Round ${round + 1} of ${diffs.length}: is <b class="cb">Deck 2</b> faster or slower than <b class="ca">Deck 1</b>?`);
+    ctx.prompt(`Round ${round + 1} of ${diffs.length}: is <b class="cb">Deck 2</b> (right ear) faster or slower than <b class="ca">Deck 1</b> (left ear)?`);
   }
   function restart() { a.pause(); b.pause(); a.seekBeat(4); b.seekBeat(4); a.play(); b.play(); clock = beatClock(a); }
   function answer(d) {
@@ -239,15 +241,32 @@ const fasterSlower = (ctx) => {
       btnL = h('button', { class: 'choice', onclick: () => answer(-1) }, h('b', {}, 'Slower'), h('span', { html: ctx.key('left') }));
       btnR = h('button', { class: 'choice', onclick: () => answer(1) }, h('b', {}, 'Faster'), h('span', { html: ctx.key('right') }));
       dotsEl = h('div', { class: 'rounds' }, ...diffs.map(() => h('i')));
-      ctx.hud.append(h('div', { class: 'choices' }, btnL, btnR), dotsEl);
+      // Tell the decks apart: Deck 1 sits in the left ear, Deck 2 in the right,
+      // and either can be heard alone while its CUE button is held.
+      ctx.engine.setPan('a', -0.85); ctx.engine.setPan('b', 0.85);
+      for (const d of ['a', 'b']) {
+        tiles[d] = h('button', { class: `solotile t${d}`, tabindex: '-1', onpointerdown: (e) => { e.preventDefault(); solo(d); }, onpointerup: () => solo(null), onpointerleave: () => solo(null) },
+          h('i', { class: 'beatdot' }), h('b', { class: `c${d}` }, d === 'a' ? 'Deck 1' : 'Deck 2'), h('small', {}, d === 'a' ? '◀ left ear' : 'right ear ▶'),
+          h('span', { html: ctx.hardware ? 'hold its <b>CUE</b> button to hear it alone' : `hold <kbd>${d === 'a' ? 'A' : 'J'}</kbd> to hear it alone` }));
+      }
+      ctx.hud.append(h('div', { class: 'solotiles' }, tiles.a, tiles.b), h('div', { class: 'choices' }, btnL, btnR), dotsEl,
+        h('div', { class: 'earsonly' }, 'Best with headphones. Learn each kick drum alone first, then listen to both.'));
     },
     start() { next(); },
     input(e) {
       if (e.type !== 'button') return false;
-      if (ctx.isLeft(e)) answer(-1); else if (ctx.isRight(e)) answer(1);
+      if (e.id === 'cue' && e.deck) solo(e.down ? e.deck : null);
+      else if (ctx.isLeft(e)) answer(-1); else if (ctx.isRight(e)) answer(1);
       return true;
     },
-    frame() { if (state === 'listen' && clock.now() > 4 + 32) restart(); },
+    frame() {
+      if (state === 'listen' && clock.now() > 4 + 32) restart();
+      // A dot pulses on a deck's beat only while that deck is soloed (no visual cheating when both play).
+      for (const d of ['a', 'b']) {
+        const on = tiles[d].classList.contains('on'), beat = ctx[d].beat;
+        tiles[d].firstChild.style.opacity = on ? String(Math.max(0, 1 - (beat - Math.floor(beat)) * 2.5)) : '0';
+      }
+    },
   };
 };
 
@@ -904,7 +923,7 @@ export const LESSONS = [
     skill: 'Hear tempo drift',
     what: 'Two tracks play together. Say whether Deck 2 is faster or slower.',
     why: 'Before you can fix a tempo you must hear which way it is wrong. It is like two people walking: the faster one slowly pulls ahead.',
-    how: ['Both tracks start in step.', 'Listen for Deck 2’s kick landing just before (faster) or after (slower) Deck 1’s.', 'The gap shrinks each round, from 5% down to under 1%.'],
+    how: ['Deck 1 plays in your left ear, Deck 2 in your right. Hold a deck’s CUE to hear it alone.', 'Both tracks start in step.', 'Listen for Deck 2’s kick landing just before (faster) or after (slower) Deck 1’s.', 'The gap shrinks each round, from 5% down to under 1%.'],
     uses: ['left', 'right'],
   },
   {
