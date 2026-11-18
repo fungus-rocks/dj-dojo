@@ -26,6 +26,7 @@ export class LessonScreen {
   constructor(app, lesson) {
     this.app = app; this.lesson = lesson; this.state = 'brief';
     this.view = {}; this.viewKey = ''; this.timers = []; this.promptText = '';
+    this.token = 0;   // bumps on every (re)start so an older start can't carry on
   }
 
   mount(root) {
@@ -44,17 +45,20 @@ export class LessonScreen {
       h('header', { class: 'bar' },
         h('a', { class: 'ghost', href: '#/' }, '← Lessons'),
         h('div', { class: 'title' }, h('small', {}, cat.name), h('b', {}, lesson.title)),
+        h('button', { class: 'ghost restart', title: 'Start this lesson again from the beginning (Backspace)', onclick: (e) => { e.currentTarget.blur(); this.restart(); } }, '↺ Restart'),
         app.devicePill()),
       h('div', { class: 'stage' }, this.waves, this.promptEl, this.hud, this.toast),
       this.rigWrap, this.overlay);
     root.replaceChildren(this.el);
     this.off = app.bus.on((e) => this.overlayInput(e));
+    this.onKey = (e) => { if (e.code === 'Backspace' && !e.repeat && !e.target.closest?.('input, textarea, select')) { e.preventDefault(); this.restart(); } };
+    window.addEventListener('keydown', this.onKey);
     app.engine.intercept = (e) => this.gameInput(e);
     this.showBrief();
   }
 
   unmount() {
-    this.off?.(); this.clearTimers();
+    this.off?.(); this.clearTimers(); window.removeEventListener('keydown', this.onKey);
     this.state = 'gone';
     this.app.engine.stopAll(); this.app.engine.intercept = null;
     this.app.rig.highlight([]);
@@ -88,14 +92,29 @@ export class LessonScreen {
     if (confirm && this.primary && !this.primary.disabled) this.primary.click();
   }
 
+  /** Throw away the current attempt and play the lesson again from the very start. */
+  restart() {
+    if (this.state === 'gone') return;
+    if (this.state === 'brief') return this.begin();
+    this.clearTimers(); this.app.engine.stopAll(); this.app.rig.highlight([]);
+    this.toast.classList.remove('show');
+    this.hideOverlay(); this.overlay.classList.remove('see-through');
+    this.startBtn = null; this.primary = null;
+    this.state = 'restart';
+    this.begin();
+  }
+
   async begin() {
-    if (this.state !== 'brief' && this.state !== 'result') return;
+    if (!['brief', 'result', 'restart'].includes(this.state)) return;
     const { app, lesson } = this, { engine, bus } = app;
+    const token = ++this.token, stale = () => token !== this.token || this.state !== 'loading';
     this.state = 'loading'; this.clearTimers();
-    this.startBtn.disabled = true; this.startBtn.textContent = 'Loading…';
+    if (this.startBtn) { this.startBtn.disabled = true; this.startBtn.textContent = 'Loading…'; }
     await Promise.race([engine.init(), new Promise((r) => setTimeout(r, 1500))]);
     if (!engine.ctx || engine.ctx.state !== 'running') {
-      this.state = 'brief'; this.startBtn.disabled = false; this.startBtn.textContent = 'Click to start (switches sound on)';
+      this.state = 'brief';
+      if (!this.startBtn) this.showBrief();
+      this.startBtn.disabled = false; this.startBtn.textContent = 'Click to start (switches sound on)';
       return;
     }
     engine.stopAll();
@@ -109,18 +128,18 @@ export class LessonScreen {
       const id = run.tracks[d];
       if (id) engine.decks[d].load(await engine.builtin(id)); else engine.decks[d].unload();
     }
-    if (this.state !== 'loading') return;
+    if (stale()) return;
     this.waveA = new WaveView(this.canvasA, engine.decks.a); this.waveB = new WaveView(this.canvasB, engine.decks.b);
     run.prepare();
-    await this.checklist(run.checklist || []);
-    if (this.state !== 'loading') return;
+    await this.checklist(run.checklist || [], stale);
+    if (stale()) return;
     this.hideOverlay(); this.primary = null;
     this.state = 'running';
     run.start();
   }
 
   /** Make sure faders and knobs are where the lesson needs them. */
-  checklist(items) {
+  checklist(items, stale = () => false) {
     const { bus } = this.app;
     if (!items.length) return Promise.resolve();
     if (!bus.hardware) { for (const it of items) bus.set(it.key, it.want, 'game'); return Promise.resolve(); }
@@ -137,7 +156,7 @@ export class LessonScreen {
       this.app.rig.highlight(items.map((it) => it.key));
       let good = 0;
       const timer = setInterval(() => {
-        if (this.state !== 'loading') { clearInterval(timer); return; }
+        if (stale()) { clearInterval(timer); return; }
         const res = items.map(ok);
         rows.forEach((r, i) => { r.classList.toggle('ok', res[i]); r.firstChild.textContent = res[i] ? '✓' : '○'; });
         good = res.every(Boolean) ? good + 1 : 0;

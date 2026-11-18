@@ -48,13 +48,14 @@ it to glide, hold `Shift` for finer moves.
 | Headphone cue | `V` | `B` |
 | Sync (free play) | `G` | `H` |
 
-Crossfader: `←` `→` · Tap: `Space` · Confirm: `Enter`
+Crossfader: `←` `→` · Tap: `Space` · Confirm: `Enter` · Restart lesson: `Backspace`
 
 ## The lessons
 
 Each lesson explains one idea, lets you try it, then gives a score out of 100,
 up to three stars, and a tip based on what you actually did. One star unlocks
-the next lesson.
+the next lesson. The **↺ Restart** button (top right) starts the lesson over at
+any time.
 
 | # | Lesson | What you learn |
 | --- | --- | --- |
