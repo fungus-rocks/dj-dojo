@@ -64,7 +64,9 @@ export class FreeScreen {
       h('p', { class: 'lead' }, 'Everything is live: play, tempo, jog, EQ, filter, faders and Sync. Nothing is scored.'),
       h('div', { class: 'actions' }, h('button', { class: 'primary', onclick: () => this.begin() }, 'Start'))));
     this.el = h('section', { class: 'screen lesson free' },
-      h('header', { class: 'bar' }, h('a', { class: 'ghost', href: '#/' }, '← Lessons'), h('div', { class: 'title' }, h('small', {}, 'No scores'), h('b', {}, 'Free Play')), app.devicePill()),
+      h('header', { class: 'bar' }, h('a', { class: 'ghost', href: '#/' }, '← Lessons'), h('div', { class: 'title' }, h('small', {}, 'No scores'), h('b', {}, 'Free Play')),
+        h('button', { class: 'ghost restart', title: 'Stop both decks and rewind them to the start', onclick: (e) => { e.currentTarget.blur(); this.rewind(); } }, '↺ Restart'),
+        app.devicePill()),
       h('div', { class: 'stage' },
         h('div', { class: 'waves' }, h('div', { class: 'wave wa' }, h('span', { class: 'tag ca' }, '1'), this.canvasA), h('div', { class: 'wave wb' }, h('span', { class: 'tag cb' }, '2'), this.canvasB)),
         h('div', { class: 'pickers' }, picker('a'), picker('b')), h('div', { class: 'freeopts' }, toggle, this.msg)),
@@ -84,6 +86,13 @@ export class FreeScreen {
     this.ready = true;
     await this.load('a', this.sela.value); await this.load('b', this.selb.value);
   }
+  /** Stop both decks and put them back at the start of their tracks. */
+  rewind() {
+    if (!this.ready) return;
+    for (const deck of Object.values(this.app.engine.decks)) if (deck.track) { deck.pause(); deck.cuePoint = deck.track.firstBeat; deck.seek(deck.track.firstBeat); }
+    this.msg.textContent = 'Both decks rewound to the start.';
+  }
+
   async load(d, id) {
     if (!this.ready) return;
     this.msg.textContent = 'Building track…';
